@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'A.B.R.A. Platform AWS Infrastructure'
+
+Resources:
+  # Cognito Identity Pool for browser access
+  ABRAIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: ABRA-Platform-Identity-Pool
+      AllowUnauthenticatedIdentities: true
+
+  # IAM Role for unauthenticated users
+  ABRAUnauthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ABRA-Unauthenticated-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                'cognito-identity.amazonaws.com:aud': !Ref ABRAIdentityPool
+              'ForAnyValue:StringLike':
+                'cognito-identity.amazonaws.com:amr': unauthenticated
+      Policies:
+        - PolicyName: ABRAUnauthenticatedPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - iam:CreateRole
+                  - iam:PutRolePolicy
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                Resource: '*'
+
+  # DynamoDB Table for DLT Ledger
+  ABRADLTTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ABRA-DLT-Ledger
+      AttributeDefinitions:
+        - AttributeName: anchorId
+          AttributeType: S
+        - AttributeName: type
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: anchorId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: TypeTimestampIndex
+          KeySchema:
+            - AttributeName: type
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  # S3 Bucket for WORM-compliant backups
+  ABRABackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'abra-backup-${AWS::AccountId}'
+      ObjectLockEnabled: true
+      ObjectLockConfiguration:
+        ObjectLockEnabled: Enabled
+        Rule:
+          DefaultRetention:
+            Mode: COMPLIANCE
+            Years: 7
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # Identity Pool Role Attachment
+  ABRAIdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref ABRAIdentityPool
+      Roles:
+        unauthenticated: !GetAtt ABRAUnauthenticatedRole.Arn
+
+Outputs:
+  IdentityPoolId:
+    Description: 'Cognito Identity Pool ID for browser access'
+    Value: !Ref ABRAIdentityPool
+    Export:
+      Name: ABRA-IdentityPoolId
+  
+  DLTTableName:
+    Description: 'DynamoDB table name for DLT ledger'
+    Value: !Ref ABRADLTTable
+    Export:
+      Name: ABRA-DLTTable
+  
+  BackupBucketName:
+    Description: 'S3 bucket for WORM-compliant backups'
+    Value: !Ref ABRABackupBucket
+    Export:
+      Name: ABRA-BackupBucket

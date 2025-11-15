@@ -32,7 +32,7 @@ app.post('/verify-proof', async (req, res) => {
     res.status(result.statusCode).json(JSON.parse(result.body));
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
     console.log(`A.B.R.A. Backend running on port ${PORT}`);
 });
