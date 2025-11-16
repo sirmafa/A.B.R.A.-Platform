@@ -1,70 +1,87 @@
 # A.B.R.A. Platform
 
-**Atomic Blockchain Ransomware Anchor** - A dual-mode cybersecurity platform designed to mitigate ransomware risks through Zero Trust Architecture and immutable backup verification.
+**Atomic Blockchain Ransomware Anchor** - A dual-mode cybersecurity service providing ransomware protection through Zero Trust Architecture and immutable backup verification.
 
-## Overview
+## 🚀 Production Service
 
-A.B.R.A. addresses critical ransomware vulnerabilities demonstrated in high-impact incidents like Change Healthcare and NHLS by implementing:
+**Live API**: `https://72a2dojacb.execute-api.us-east-1.amazonaws.com/prod`  
+**Dashboard**: `https://main.d1lcyvw1emmtji.amplifyapp.com`
 
-- **Mode 1: Breach Prevention** - JIT access with MFA enforcement
-- **Mode 2: Resilient Recovery** - Immutable backup integrity verification
+## 📖 Documentation
 
-## Architecture
+- **[Operators Manual](OPERATORS-MANUAL.md)** - Complete usage guide and API reference
+- **[Integration Prompt](ABRA-Integration-Prompt.md)** - Copy-paste integration for other applications
+- **[Integration Examples](integration-examples/)** - Code samples for common use cases
 
-### Frontend (React)
-- Modular component structure
-- Security-compliant (XSS prevention, no hardcoded secrets)
-- Real-time status monitoring
+## 🔧 Quick Integration
 
-### Backend (AWS Serverless)
-- **Lambda Functions**: `/request-pat`, `/anchor-proof`, `/verify-proof`
-- **DLT Service**: Immutable hash anchoring
-- **Security**: MFA validation, temporary IAM roles, WORM compliance
+```javascript
+// Request temporary access token
+const pat = await fetch('https://72a2dojacb.execute-api.us-east-1.amazonaws.com/prod/request-pat', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({userId: 'user123', companyId: 'company456'})
+});
 
-## Quick Start
+// Anchor backup proof
+const hash = crypto.createHash('sha256').update(backupData).digest('hex');
+await fetch('https://72a2dojacb.execute-api.us-east-1.amazonaws.com/prod/anchor-proof', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({hash})
+});
 
-### Backend
+// Verify backup integrity
+const verification = await fetch('https://72a2dojacb.execute-api.us-east-1.amazonaws.com/prod/verify-proof', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({currentHash: hash})
+});
+// Returns: VERIFIED-CLEAN or COMPROMISED
+```
+
+## 🛡️ Security Features
+
+- **Zero Trust**: No permanent credentials
+- **JIT Access**: 15-minute token expiry
+- **Immutable Ledger**: DLT anchoring prevents tampering
+- **Ransomware Detection**: Hash verification detects compromise
+- **WORM Compliance**: S3 Object Lock for backup integrity
+
+## 🏗️ Architecture
+
+```
+┌─────────────────┐    HTTPS/API    ┌─────────────────┐
+│   Your App      │ ──────────────► │   A.B.R.A.      │
+│                 │                 │   Service       │
+│ - Any System    │ ◄────────────── │                 │
+│ - Web/Mobile    │    Protection   │ - AWS Lambda    │
+│ - Backend       │                 │ - DynamoDB      │
+│ - Database      │                 │ - S3 WORM       │
+└─────────────────┘                 └─────────────────┘
+```
+
+## 🚀 Development
+
+### Local Backend
 ```bash
 cd backend
 npm install
-npm start  # Local development server on port 3001
+npm start  # Port 3001
 ```
 
-### Frontend
+### Local Frontend
 ```bash
-# Serve the React application
-# Update API endpoints to point to localhost:3001
+npm install
+npm run dev  # Port 5173
 ```
 
-## Security Features
-
-- **Zero Trust**: No standing credentials
-- **MFA Enforcement**: All privileged access requires MFA
-- **JIT Access**: 15-minute token expiry
-- **Immutable Logging**: DLT anchoring prevents tampering
-- **WORM Compliance**: S3 Object Lock for backup integrity
-
-## Deployment
-
-### Development
-```bash
-cd backend
-npm run deploy:dev
-```
-
-### Production
+### Deploy
 ```bash
 cd backend
 npm run deploy:prod
 ```
 
-## Environment Variables
-
-Copy `backend/.env.example` to `backend/.env` and configure:
-- AWS credentials and region
-- Cognito User Pool settings
-- DLT secret key
-
-## License
+## 📄 License
 
 MIT

@@ -16,23 +16,28 @@ dist/
 build/
 .serverless/
 
-# IDE
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
 
 # Logs
-logs/
 *.log
-
-# AWS
-.aws/
+logs/
 
 # Temporary files
 *.tmp
 *.temp
+*.zip
+
+# AWS
+.aws/
+aws-exports.js
+
+# Serverless
+.serverless_nextjs/
