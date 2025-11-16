@@ -1,0 +1,105 @@
+service: abra-platform
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ${opt:region, 'us-east-1'}
+  environment:
+    COGNITO_USER_POOL_ID: ${env:COGNITO_USER_POOL_ID}
+    COGNITO_APP_CLIENT_ID: ${env:COGNITO_APP_CLIENT_ID}
+    DLT_TABLE_NAME: ${self:service}-dlt-ledger-${self:provider.stage}
+    DLT_SECRET_KEY: ${env:DLT_SECRET_KEY}
+    AWS_ACCOUNT_ID: ${env:AWS_ACCOUNT_ID}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - cognito-idp:AdminGetUser
+        - iam:CreateRole
+        - iam:DeleteRole
+        - iam:PutRolePolicy
+        - iam:DeleteRolePolicy
+        - dynamodb:PutItem
+        - dynamodb:Query
+        - dynamodb:Scan
+      Resource: "*"
+
+functions:
+  requestPat:
+    handler: lambda/request-pat.handler
+    events:
+      - http:
+          path: /request-pat
+          method: post
+          cors: true
+    timeout: 30
+
+  anchorProof:
+    handler: lambda/anchor-proof.handler
+    events:
+      - http:
+          path: /anchor-proof
+          method: post
+          cors: true
+    timeout: 30
+
+  verifyProof:
+    handler: lambda/verify-proof.handler
+    events:
+      - http:
+          path: /verify-proof
+          method: post
+          cors: true
+    timeout: 30
+
+resources:
+  Resources:
+    DLTLedgerTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DLT_TABLE_NAME}
+        AttributeDefinitions:
+          - AttributeName: anchorId
+            AttributeType: S
+          - AttributeName: type
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: N
+        KeySchema:
+          - AttributeName: anchorId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: TypeTimestampIndex
+            KeySchema:
+              - AttributeName: type
+                KeyType: HASH
+              - AttributeName: timestamp
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 5
+              WriteCapacityUnits: 5
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+
+    BackupBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: abra-backup-${self:provider.stage}
+        ObjectLockEnabled: true
+        ObjectLockConfiguration:
+          ObjectLockEnabled: Enabled
+          Rule:
+            DefaultRetention:
+              Mode: COMPLIANCE
+              Years: 7
+        VersioningConfiguration:
+          Status: Enabled
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true

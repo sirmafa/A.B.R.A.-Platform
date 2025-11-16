@@ -287,9 +287,9 @@ curl -X POST http://localhost:3002/anchor-proof \
 ### Test Verification:
 ```bash
 # Test backup integrity verification
-curl -X POST http://localhost:3002/verify-proof \
+ccurl -X POST http://localhost:3002/anchor-proof \
   -H "Content-Type: application/json" \
-  -d '{"currentHash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}'
+  -d '{"hash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}'
 ```
 
 ---

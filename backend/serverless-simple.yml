@@ -1,0 +1,84 @@
+service: abra-platform
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  environment:
+    COGNITO_USER_POOL_ID: us-east-1_PROD123
+    COGNITO_APP_CLIENT_ID: prod123client456
+    DLT_TABLE_NAME: abra-platform-dlt-ledger-prod
+    DLT_SECRET_KEY: prod-secret-key-for-abra-platform
+    AWS_ACCOUNT_ID: 898133201826
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - cognito-idp:AdminGetUser
+        - iam:CreateRole
+        - iam:DeleteRole
+        - iam:PutRolePolicy
+        - iam:DeleteRolePolicy
+        - dynamodb:PutItem
+        - dynamodb:Query
+        - dynamodb:Scan
+      Resource: "*"
+
+functions:
+  requestPat:
+    handler: lambda/request-pat.handler
+    events:
+      - http:
+          path: /request-pat
+          method: post
+          cors: true
+    timeout: 30
+
+  anchorProof:
+    handler: lambda/anchor-proof.handler
+    events:
+      - http:
+          path: /anchor-proof
+          method: post
+          cors: true
+    timeout: 30
+
+  verifyProof:
+    handler: lambda/verify-proof.handler
+    events:
+      - http:
+          path: /verify-proof
+          method: post
+          cors: true
+    timeout: 30
+
+resources:
+  Resources:
+    DLTLedgerTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: abra-platform-dlt-ledger-prod
+        AttributeDefinitions:
+          - AttributeName: anchorId
+            AttributeType: S
+          - AttributeName: type
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: N
+        KeySchema:
+          - AttributeName: anchorId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: TypeTimestampIndex
+            KeySchema:
+              - AttributeName: type
+                KeyType: HASH
+              - AttributeName: timestamp
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 5
+              WriteCapacityUnits: 5
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
