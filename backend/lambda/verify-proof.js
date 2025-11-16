@@ -1,8 +1,19 @@
-const dlt = process.env.NODE_ENV === 'production' 
-    ? require('../dlt/anchor-service') 
-    : require('../dlt/mock-anchor-service');
+const dlt = require('./dlt/anchor-service');
 
 exports.handler = async (event) => {
+    // Handle CORS preflight
+    if (event.httpMethod === 'OPTIONS') {
+        return {
+            statusCode: 200,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type'
+            },
+            body: ''
+        };
+    }
+    
     try {
         const { currentHash } = JSON.parse(event.body);
         
@@ -46,6 +57,10 @@ exports.handler = async (event) => {
         console.error('Verify proof failed:', error);
         return {
             statusCode: 500,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify({ error: 'Verification failed' })
         };
     }

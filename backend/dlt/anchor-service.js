@@ -1,7 +1,9 @@
-const AWS = require('aws-sdk');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, PutCommand, QueryCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
 const crypto = require('crypto');
 
-const dynamodb = new AWS.DynamoDB.DocumentClient();
+const client = new DynamoDBClient({});
+const dynamodb = DynamoDBDocumentClient.from(client);
 
 class DLTAnchorService {
     constructor() {
@@ -25,17 +27,17 @@ class DLTAnchorService {
             signature: this.createSignature(hash, timestamp, blockHeight)
         };
         
-        await dynamodb.put({
+        await dynamodb.send(new PutCommand({
             TableName: this.tableName,
             Item: ledgerEntry,
             ConditionExpression: 'attribute_not_exists(anchorId)'
-        }).promise();
+        }));
         
         return { anchorId, blockHeight };
     }
     
     async getLatestAnchor(type) {
-        const result = await dynamodb.query({
+        const result = await dynamodb.send(new QueryCommand({
             TableName: this.tableName,
             IndexName: 'TypeTimestampIndex',
             KeyConditionExpression: '#type = :type',
@@ -43,27 +45,26 @@ class DLTAnchorService {
             ExpressionAttributeValues: { ':type': type },
             ScanIndexForward: false,
             Limit: 1
-        }).promise();
+        }));
         
         return result.Items[0] || null;
     }
     
     async getCurrentBlockHeight() {
-        const result = await dynamodb.scan({
+        const result = await dynamodb.send(new ScanCommand({
             TableName: this.tableName,
             Select: 'COUNT'
-        }).promise();
+        }));
         
         return result.Count;
     }
     
     async getPreviousHash() {
-        const result = await dynamodb.scan({
+        const result = await dynamodb.send(new ScanCommand({
             TableName: this.tableName,
             ProjectionExpression: 'signature',
-            Limit: 1,
-            ScanIndexForward: false
-        }).promise();
+            Limit: 1
+        }));
         
         return result.Items[0]?.signature || '0000000000000000000000000000000000000000000000000000000000000000';
     }

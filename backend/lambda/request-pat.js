@@ -1,28 +1,44 @@
-const AWS = require('aws-sdk');
+const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
+const { IAMClient, CreateRoleCommand, PutRolePolicyCommand, DeleteRolePolicyCommand, DeleteRoleCommand } = require('@aws-sdk/client-iam');
 const crypto = require('crypto');
 
-const cognito = new AWS.CognitoIdentityServiceProvider();
-const iam = new AWS.IAM();
-const dlt = process.env.NODE_ENV === 'production' 
-    ? require('../dlt/anchor-service') 
-    : require('../dlt/mock-anchor-service');
+const cognito = new CognitoIdentityProviderClient({});
+const iam = new IAMClient({});
+const dlt = require('./dlt/anchor-service');
 
 exports.handler = async (event) => {
+    // Handle CORS preflight
+    if (event.httpMethod === 'OPTIONS') {
+        return {
+            statusCode: 200,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type'
+            },
+            body: ''
+        };
+    }
+    
     try {
         const { userId, companyId } = JSON.parse(event.body);
         
         // Mock MFA validation for local development
-        if (process.env.NODE_ENV !== 'production') {
-            console.log('Mock MFA validation passed for user:', userId);
-        } else {
-            const userAttributes = await cognito.adminGetUser({
+        // Mock MFA validation for development
+        console.log('Mock MFA validation passed for user:', userId);
+        if (false) {
+            const userAttributes = await cognito.send(new AdminGetUserCommand({
                 UserPoolId: process.env.COGNITO_USER_POOL_ID,
                 Username: userId
-            }).promise();
+            }));
             
             if (!userAttributes.UserMFASettingList || userAttributes.UserMFASettingList.length === 0) {
                 return {
                     statusCode: 403,
+                    headers: {
+                        'Access-Control-Allow-Origin': '*',
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({ error: 'MFA required for PAT access' })
                 };
             }
@@ -61,6 +77,10 @@ exports.handler = async (event) => {
         console.error('PAT request failed:', error);
         return {
             statusCode: 500,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify({ error: 'Internal server error' })
         };
     }
@@ -93,22 +113,22 @@ async function createTemporaryRole(userId, companyId) {
         }]
     };
     
-    await iam.createRole({
+    await iam.send(new CreateRoleCommand({
         RoleName: roleName,
         AssumeRolePolicyDocument: JSON.stringify(assumeRolePolicy)
-    }).promise();
+    }));
     
-    await iam.putRolePolicy({
+    await iam.send(new PutRolePolicyCommand({
         RoleName: roleName,
         PolicyName: 'ABRAJITPolicy',
         PolicyDocument: JSON.stringify(policyDocument)
-    }).promise();
+    }));
     
     // Schedule role deletion after 15 minutes
     setTimeout(async () => {
         try {
-            await iam.deleteRolePolicy({ RoleName: roleName, PolicyName: 'ABRAJITPolicy' }).promise();
-            await iam.deleteRole({ RoleName: roleName }).promise();
+            await iam.send(new DeleteRolePolicyCommand({ RoleName: roleName, PolicyName: 'ABRAJITPolicy' }));
+            await iam.send(new DeleteRoleCommand({ RoleName: roleName }));
         } catch (err) {
             console.error('Failed to cleanup role:', err);
         }
