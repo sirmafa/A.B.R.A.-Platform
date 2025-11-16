@@ -1,0 +1,374 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'A.B.R.A. Platform Complete Backend'
+
+Resources:
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: 
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/ABRA-DLT-Ledger'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/ABRA-DLT-Ledger/index/*'
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                Resource: '*'
+
+  # Lambda Functions
+  RequestPatFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: abra-request-pat
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          DLT_TABLE_NAME: ABRA-DLT-Ledger
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk');
+          const crypto = require('crypto');
+          const dynamodb = new AWS.DynamoDB.DocumentClient();
+          
+          exports.handler = async (event) => {
+            const headers = {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Headers': 'Content-Type',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS'
+            };
+            
+            if (event.httpMethod === 'OPTIONS') {
+              return { statusCode: 200, headers, body: '' };
+            }
+            
+            try {
+              const { userId, companyId } = JSON.parse(event.body);
+              const patToken = 'PAT-' + crypto.randomBytes(8).toString('hex').toUpperCase();
+              const expiry = Date.now() + 900000;
+              
+              // Anchor to DLT
+              const anchorId = crypto.randomUUID();
+              const patHash = crypto.createHash('sha256').update(patToken + userId).digest('hex');
+              
+              await dynamodb.put({
+                TableName: 'ABRA-DLT-Ledger',
+                Item: {
+                  anchorId,
+                  hash: patHash,
+                  type: 'PAT_ISSUED',
+                  timestamp: Date.now(),
+                  metadata: { userId, companyId, expiry }
+                }
+              }).promise();
+              
+              return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({
+                  token: patToken,
+                  expiry,
+                  message: 'PAT issued via JIT Access Gate. Hash anchored on DLT.'
+                })
+              };
+            } catch (error) {
+              return {
+                statusCode: 500,
+                headers,
+                body: JSON.stringify({ error: error.message })
+              };
+            }
+          };
+
+  AnchorProofFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: abra-anchor-proof
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          DLT_TABLE_NAME: ABRA-DLT-Ledger
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk');
+          const crypto = require('crypto');
+          const dynamodb = new AWS.DynamoDB.DocumentClient();
+          
+          exports.handler = async (event) => {
+            const headers = {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Headers': 'Content-Type',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS'
+            };
+            
+            if (event.httpMethod === 'OPTIONS') {
+              return { statusCode: 200, headers, body: '' };
+            }
+            
+            try {
+              const { hash } = JSON.parse(event.body);
+              
+              if (!hash || hash.length !== 64) {
+                return {
+                  statusCode: 400,
+                  headers,
+                  body: JSON.stringify({ error: 'Invalid hash format. Must be SHA-256.' })
+                };
+              }
+              
+              const anchorId = crypto.randomUUID();
+              const blockHeight = Math.floor(Date.now() / 1000);
+              
+              await dynamodb.put({
+                TableName: 'ABRA-DLT-Ledger',
+                Item: {
+                  anchorId,
+                  hash,
+                  type: 'BACKUP_PROOF',
+                  timestamp: Date.now(),
+                  blockHeight,
+                  metadata: { source: 'A.B.R.A-Platform' }
+                }
+              }).promise();
+              
+              return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({
+                  success: true,
+                  message: 'Backup Proof successfully anchored to DLT.',
+                  hash,
+                  anchorId,
+                  blockHeight
+                })
+              };
+            } catch (error) {
+              return {
+                statusCode: 500,
+                headers,
+                body: JSON.stringify({ error: error.message })
+              };
+            }
+          };
+
+  VerifyProofFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: abra-verify-proof
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          DLT_TABLE_NAME: ABRA-DLT-Ledger
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk');
+          const dynamodb = new AWS.DynamoDB.DocumentClient();
+          
+          exports.handler = async (event) => {
+            const headers = {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Headers': 'Content-Type',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS'
+            };
+            
+            if (event.httpMethod === 'OPTIONS') {
+              return { statusCode: 200, headers, body: '' };
+            }
+            
+            try {
+              const { currentHash } = JSON.parse(event.body);
+              
+              const result = await dynamodb.query({
+                TableName: 'ABRA-DLT-Ledger',
+                IndexName: 'TypeTimestampIndex',
+                KeyConditionExpression: '#type = :type',
+                ExpressionAttributeNames: { '#type': 'type' },
+                ExpressionAttributeValues: { ':type': 'BACKUP_PROOF' },
+                ScanIndexForward: false,
+                Limit: 1
+              }).promise();
+              
+              const anchoredProof = result.Items[0];
+              const isMatch = anchoredProof && currentHash === anchoredProof.hash;
+              
+              return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({
+                  isMatch,
+                  status: isMatch ? 'VERIFIED-CLEAN' : 'COMPROMISED',
+                  anchoredHash: anchoredProof?.hash,
+                  anchorTimestamp: anchoredProof?.timestamp,
+                  blockHeight: anchoredProof?.blockHeight
+                })
+              };
+            } catch (error) {
+              return {
+                statusCode: 500,
+                headers,
+                body: JSON.stringify({ error: error.message })
+              };
+            }
+          };
+
+  # API Gateway
+  ABRAApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: ABRA-Platform-API
+      Description: API Gateway for A.B.R.A. Platform
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # API Resources
+  RequestPatResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ABRAApiGateway
+      ParentId: !GetAtt ABRAApiGateway.RootResourceId
+      PathPart: request-pat
+
+  AnchorProofResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ABRAApiGateway
+      ParentId: !GetAtt ABRAApiGateway.RootResourceId
+      PathPart: anchor-proof
+
+  VerifyProofResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ABRAApiGateway
+      ParentId: !GetAtt ABRAApiGateway.RootResourceId
+      PathPart: verify-proof
+
+  # API Methods
+  RequestPatMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ABRAApiGateway
+      ResourceId: !Ref RequestPatResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RequestPatFunction.Arn}/invocations'
+
+  RequestPatOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ABRAApiGateway
+      ResourceId: !Ref RequestPatResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  AnchorProofMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ABRAApiGateway
+      ResourceId: !Ref AnchorProofResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AnchorProofFunction.Arn}/invocations'
+
+  VerifyProofMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ABRAApiGateway
+      ResourceId: !Ref VerifyProofResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${VerifyProofFunction.Arn}/invocations'
+
+  # Lambda Permissions
+  RequestPatPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RequestPatFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub '${ABRAApiGateway}/*/*'
+
+  AnchorProofPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AnchorProofFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub '${ABRAApiGateway}/*/*'
+
+  VerifyProofPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VerifyProofFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub '${ABRAApiGateway}/*/*'
+
+  # API Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - RequestPatMethod
+      - AnchorProofMethod
+      - VerifyProofMethod
+    Properties:
+      RestApiId: !Ref ABRAApiGateway
+      StageName: prod
+
+Outputs:
+  ApiGatewayUrl:
+    Description: 'API Gateway URL for A.B.R.A. Platform'
+    Value: !Sub 'https://${ABRAApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: ABRA-ApiGatewayUrl

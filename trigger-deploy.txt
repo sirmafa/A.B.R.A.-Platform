@@ -1,0 +1,1 @@
+Trigger Amplify redeploy after environment variable update
