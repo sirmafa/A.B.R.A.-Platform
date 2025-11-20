@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:3002';
+const API_BASE_URL = 'https://72a2dojacb.execute-api.us-east-1.amazonaws.com/prod';
 
 export const mockApi = {
   requestPat: async (user, companyId) => {

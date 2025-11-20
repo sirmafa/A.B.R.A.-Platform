@@ -1,7 +1,7 @@
 import React, { useState, useReducer, useCallback } from 'react';
 
 // A.B.R.A. Configuration for Amplify deployment
-const API_BASE_URL = import.meta.env.VITE_ABRA_API_URL || 'https://your-api-gateway-url.amazonaws.com/prod';
+const API_BASE_URL = import.meta.env.VITE_ABRA_API_URL || 'https://72a2dojacb.execute-api.us-east-1.amazonaws.com/prod';
 
 const api = {
     requestPat: async (user, companyId) => {
