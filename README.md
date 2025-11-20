@@ -1,17 +1,20 @@
 # A.B.R.A. Platform
 
-**Atomic Blockchain Ransomware Anchor** - A dual-mode cybersecurity service providing ransomware protection through Zero Trust Architecture and immutable backup verification.
+**Atomic Blockchain Ransomware Anchor** - A production-ready cybersecurity platform providing dual-mode ransomware protection through Zero Trust Architecture and immutable backup verification.
 
-## 🚀 Production Service
+## 🚀 Live Production System
 
-**Live API**: `https://72a2dojacb.execute-api.us-east-1.amazonaws.com/prod`  
-**Dashboard**: `https://main.d1lcyvw1emmtji.amplifyapp.com`
+**API Endpoint**: `https://72a2dojacb.execute-api.us-east-1.amazonaws.com/prod`  
+**Dashboard**: `https://main.d1lcyvw1emmtji.amplifyapp.com`  
+**Repository**: `https://github.com/sirmafa/A.B.R.A.-Platform`
 
 ## 📖 Documentation
 
-- **[Operators Manual](OPERATORS-MANUAL.md)** - Complete usage guide and API reference
-- **[Integration Prompt](ABRA-Integration-Prompt.md)** - Copy-paste integration for other applications
-- **[Integration Examples](integration-examples/)** - Code samples for common use cases
+- **[Portfolio Overview](PROJECT-PORTFOLIO.md)** - Technical achievements and skills demonstrated
+- **[System Architecture](ARCHITECTURE.md)** - Detailed architecture diagrams and design
+- **[Operators Manual](OPERATORS-MANUAL.md)** - Complete API documentation and usage guide
+- **[Integration Guide](ABRA-Integration-Prompt.md)** - Copy-paste integration for other applications
+- **[Code Examples](integration-examples/)** - Implementation samples for common use cases
 
 ## 🔧 Quick Integration
 

@@ -1,35 +1,78 @@
 import React, { useState, useReducer, useCallback } from 'react';
 
-// A.B.R.A. Configuration for Amplify deployment
+/**
+ * A.B.R.A. Platform - Main Application Component
+ * Atomic Blockchain Ransomware Anchor
+ * 
+ * Provides dual-mode ransomware protection:
+ * - Mode 1: JIT Access Gate (Breach Prevention)
+ * - Mode 2: Integrity Anchor (Resilient Recovery)
+ */
+
 const API_BASE_URL = import.meta.env.VITE_ABRA_API_URL || 'https://72a2dojacb.execute-api.us-east-1.amazonaws.com/prod';
 
+/**
+ * API Service Layer for A.B.R.A. Platform
+ * Handles all communication with the serverless backend
+ */
 const api = {
+    /**
+     * Request Personal Access Token (PAT) for JIT access
+     * @param {string} user - User identifier
+     * @param {string} companyId - Company identifier
+     * @returns {Promise<Object>} PAT token with expiry and role ARN
+     */
     requestPat: async (user, companyId) => {
         const response = await fetch(`${API_BASE_URL}/request-pat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: user, companyId })
         });
+        if (!response.ok) {
+            throw new Error(`PAT request failed: ${response.statusText}`);
+        }
         return response.json();
     },
+
+    /**
+     * Anchor backup proof hash to immutable DLT ledger
+     * @param {string} hash - SHA-256 hash of backup data
+     * @returns {Promise<Object>} Anchor confirmation with ID and block height
+     */
     anchorProof: async (hash) => {
         const response = await fetch(`${API_BASE_URL}/anchor-proof`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ hash })
         });
+        if (!response.ok) {
+            throw new Error(`Anchor proof failed: ${response.statusText}`);
+        }
         return response.json();
     },
+
+    /**
+     * Verify backup integrity against anchored proof
+     * @param {string} currentHash - Current SHA-256 hash to verify
+     * @returns {Promise<Object>} Verification result (VERIFIED-CLEAN or COMPROMISED)
+     */
     verifyProof: async (currentHash) => {
         const response = await fetch(`${API_BASE_URL}/verify-proof`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ currentHash })
         });
+        if (!response.ok) {
+            throw new Error(`Proof verification failed: ${response.statusText}`);
+        }
         return response.json();
     }
 };
 
+/**
+ * Initial application state
+ * Represents the current security posture and user context
+ */
 const initialState = {
     isLoggedIn: true,
     userName: 'Dr. Specialist',
@@ -41,14 +84,35 @@ const initialState = {
     patExpiry: null,
 };
 
+/**
+ * Application state reducer
+ * Manages state transitions for security operations
+ * @param {Object} state - Current application state
+ * @param {Object} action - Action object with type and payload
+ * @returns {Object} New state
+ */
 function appReducer(state, action) {
     switch (action.type) {
         case 'SET_ANCHOR_STATUS':
-            return { ...state, dltAnchorStatus: action.payload.status, dltAnchorHash: action.payload.hash || null };
+            return { 
+                ...state, 
+                dltAnchorStatus: action.payload.status, 
+                dltAnchorHash: action.payload.hash || null 
+            };
         case 'ISSUE_PAT':
-            return { ...state, patStatus: 'Active', patToken: action.payload.token, patExpiry: action.payload.expiry };
+            return { 
+                ...state, 
+                patStatus: 'Active', 
+                patToken: action.payload.token, 
+                patExpiry: action.payload.expiry 
+            };
         case 'REVOKE_PAT':
-            return { ...state, patStatus: 'Inactive', patToken: null, patExpiry: null };
+            return { 
+                ...state, 
+                patStatus: 'Inactive', 
+                patToken: null, 
+                patExpiry: null 
+            };
         default:
             return state;
     }
